@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="AstroDX .adx Song Package Compiler - High-performance browser-based batch compiler for maimai chart packages">
+  <title>AstroDX Song Package Compiler (.adx)</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+  
+  <!-- Local JSZip with CDN Fallback -->
+  <script src="jszip.min.js"></script>
+  <script>
+    if (typeof JSZip === 'undefined') {
+      document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"><\/script>');
+    }
+  </script>
+</head>
+<body>
+  <div class="app-layout">
+    
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand-section">
+        <div class="logo-badge" id="logo-badge">⚡</div>
+        <div class="brand-titles">
+          <h1>
+            <span class="gradient-text">AstroDX Song Compiler</span>
+            <span class="version-tag">.ADX BATCH</span>
+          </h1>
+          <p class="brand-subtitle">Automated Simai / maimai chart archiver for AstroDX mobile & arcade simulator</p>
+        </div>
+      </div>
+      
+      <div class="header-status-pill">
+        <span class="pulse-dot" id="system-status-dot"></span>
+        <span id="system-status-text">Engine Ready</span>
+      </div>
+
+      <div style="display:flex; gap:10px; align-items:center;">
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-open-catalog" title="Inspect official SEGA International live songs and check missing charts">
+          <span>🌐 Official SEGA Catalog (<span id="btn-catalog-count">0</span>)</span>
+        </button>
+        <button type="button" class="btn btn-primary btn-sm" id="btn-open-dashboard" title="View live status of all 28 versions and batch compile">
+          <span>📊 All Versions Status</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Folder Selection & Configuration Card -->
+    <section class="folder-selection-card" id="folder-selection-card">
+      <div class="selection-grid">
+        <!-- 1. Source Maimai Version / Song Folder -->
+        <div class="folder-channel-card">
+          <div class="folder-info-box" id="folder-drop-zone">
+            <div class="folder-icon-large">📂</div>
+            <div class="folder-texts">
+              <span class="folder-main-label" id="folder-label-text">1. Source Maimai Version / Song Folder</span>
+              <span class="current-path-display" id="current-folder-path">No folder selected yet. Click "Open Version Folder" or select below</span>
+            </div>
+          </div>
+
+          <div class="selection-buttons">
+            <!-- Quick Version Dropdown (Instantly loads directly from server) -->
+            <div class="version-quick-select-wrap">
+              <label for="select-version-quick">⚡ Quick Switch Version:</label>
+              <select id="select-version-quick" class="select-control version-quick-select">
+                <option value="">-- Choose Maimai Version --</option>
+              </select>
+            </div>
+
+            <!-- Native File System Access Picker -->
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-select-directory">
+              <span>📂 Open Folder...</span>
+            </button>
+
+            <!-- Standard input fallback for double-click / file:// or unsupported browsers -->
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-browse-fallback">
+              <span>📁 Browse Files...</span>
+            </button>
+            
+            <input type="file" id="input-folder-picker" webkitdirectory directory multiple style="display: none;">
+          </div>
+        </div>
+
+        <!-- 2. Output Destination Folder -->
+        <div class="folder-channel-card">
+          <div class="folder-info-box destination active" id="output-folder-box">
+            <div class="folder-icon-large destination-icon">🎯</div>
+            <div class="folder-texts" style="width: 100%; min-width: 0;">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                <span class="folder-main-label">2. Destination Folder (Auto-Move .adx)</span>
+                <span id="output-save-badge" class="badge-status-clean" style="display: none;">✓ Saved</span>
+              </div>
+              <div class="output-path-edit-row">
+                <input type="text" id="input-output-path" class="path-input-control" placeholder="Enter output path (e.g. ./output or D:\AstroDX)" spellcheck="false" autocomplete="off" />
+                <button type="button" class="btn btn-sm btn-outline-accent" id="btn-save-output-path" title="Save output location to config.json">
+                  <span>💾 Save</span>
+                </button>
+              </div>
+              <div class="path-subtext">Active destination: <span class="current-path-display" id="current-output-path">./output</span></div>
+            </div>
+          </div>
+
+          <div class="selection-buttons">
+            <button type="button" class="btn btn-success" id="btn-select-output-directory" title="Pick destination folder with system directory picker">
+              <span>🎯 Browse Folder...</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Config & Options -->
+      <div class="options-bar">
+        <div class="options-group">
+          <label class="toggle-label" title="Excludes .mp4 background videos from .adx to save huge amounts of storage and RAM">
+            <input type="checkbox" id="chk-exclude-mp4" checked>
+            <span>Exclude <code>.mp4</code> videos</span>
+            <span class="toggle-badge-benefit" id="mp4-benefit-badge">Saves ~80% Size</span>
+          </label>
+
+          <label class="toggle-label" title="Overwrites existing .adx if a file with same name already exists in folder">
+            <input type="checkbox" id="chk-overwrite" checked>
+            <span>Overwrite existing <code>.adx</code></span>
+          </label>
+        </div>
+
+        <div class="options-group">
+          <label for="select-compression" style="color: var(--text-secondary); font-size: 0.85rem;">Compression Level:</label>
+          <select id="select-compression" class="select-control">
+            <option value="6" selected>Optimal (Level 6 - Recommended)</option>
+            <option value="1">Fast (Level 1 - Faster compression)</option>
+            <option value="9">Maximum (Level 9 - Smallest size)</option>
+            <option value="0">Store (Level 0 - Uncompressed)</option>
+          </select>
+          
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-show-ps-script" title="View or copy equivalent PowerShell script">
+            <span>📜 View PowerShell Script</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stats Ribbon -->
+    <section class="stats-ribbon" id="stats-ribbon-card">
+      <div class="stat-card stat-cyan">
+        <span class="stat-label">Total Songs Found</span>
+        <span class="stat-value" id="stat-total-songs">0</span>
+        <span class="stat-desc" id="stat-total-files">0 chart files loaded</span>
+      </div>
+
+      <div class="stat-card stat-green">
+        <span class="stat-label">Compiled (.adx)</span>
+        <span class="stat-value" id="stat-compiled-count">0</span>
+        <span class="stat-desc" id="stat-compiled-desc">Ready to play</span>
+      </div>
+
+      <div class="stat-card stat-pink">
+        <span class="stat-label">Pending Compilation</span>
+        <span class="stat-value" id="stat-pending-count">0</span>
+        <span class="stat-desc">Waiting in queue</span>
+      </div>
+
+      <div class="stat-card stat-purple">
+        <span class="stat-label">Estimated Storage Saved</span>
+        <span class="stat-value" id="stat-saved-space">0 MB</span>
+        <span class="stat-desc" id="stat-video-count">0 videos excluded</span>
+      </div>
+    </section>
+
+    <!-- Master Progress Bar (Visible during batch compiling) -->
+    <div class="master-progress-card" id="master-progress-container">
+      <div class="progress-header">
+        <div class="progress-title-wrap">
+          <span id="progress-spinner">⚙️</span>
+          <span id="progress-main-title">Compiling Songs...</span>
+        </div>
+        <span class="progress-status-text" id="progress-percentage-label">0% (0/0)</span>
+      </div>
+
+      <div class="progress-bar-container">
+        <div class="progress-bar-fill" id="progress-bar-fill"></div>
+      </div>
+
+      <div class="progress-controls">
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-cancel-compilation">
+          <span>⏹ Stop Compilation</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Filter & Toolbar -->
+    <section class="toolbar-section">
+      <div class="toolbar-top-row">
+        <div class="search-box-wrap">
+          <span>🔍</span>
+          <input type="text" id="input-search" placeholder="Search by song title, artist, or folder name...">
+        </div>
+
+        <!-- View Mode: List vs Grid -->
+        <div class="view-controls-wrap">
+          <div class="view-toggle-group">
+            <button type="button" class="view-toggle-btn active" id="btn-view-list" title="Compact List View (Recommended for side-by-side browsing)">☰ List</button>
+            <button type="button" class="view-toggle-btn" id="btn-view-grid" title="Cards Grid View">🔲 Grid</button>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-toggle-compact" title="Collapse top banners to save screen space">
+            <span id="compact-toggle-icon">↕</span> <span id="compact-toggle-text">Compact</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="toolbar-bottom-row">
+        <div class="filter-btn-group">
+          <button type="button" class="filter-pill active" data-filter="all" id="filter-all">All (<span id="count-all">0</span>)</button>
+          <button type="button" class="filter-pill filter-pill-live" data-filter="live" id="filter-live">✨ Live International (<span id="count-live">0</span>)</button>
+          <button type="button" class="filter-pill filter-pill-missing" data-filter="missing" id="filter-missing" style="display:none;">⚠️ Missing from Disk (<span id="count-missing">0</span>)</button>
+          <button type="button" class="filter-pill" data-filter="pending" id="filter-pending">Pending (<span id="count-pending">0</span>)</button>
+          <button type="button" class="filter-pill" data-filter="compiled" id="filter-compiled">Compiled (<span id="count-compiled">0</span>)</button>
+          <button type="button" class="filter-pill filter-pill-deleted" data-filter="deleted" id="filter-deleted">Expired Licenses (<span id="count-deleted">0</span>)</button>
+          <button type="button" class="filter-pill filter-pill-utage" data-filter="utage" id="filter-utage">Utage (<span id="count-utage">0</span>)</button>
+        </div>
+
+        <div class="batch-action-buttons">
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-select-all">Select All</button>
+          <button type="button" class="btn btn-success btn-sm" id="btn-select-live" title="Select all official live songs for this version">
+            <span>✨ Select Live (<span id="live-selectable-count">0</span>)</span>
+          </button>
+          <button type="button" class="btn btn-magenta btn-sm" id="btn-compile-selected" disabled>
+            <span>⚡ Compile Selected (<span id="selected-count">0</span>)</span>
+          </button>
+          <button type="button" class="btn btn-primary btn-sm" id="btn-compile-all-live">
+            <span>⚡ Compile All Live</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Song List / Grid Container -->
+    <main class="songs-container view-list" id="songs-grid-container">
+      <div class="empty-state-card" id="empty-state-view">
+        <div class="empty-icon">📂</div>
+        <h3>No Songs Loaded Yet</h3>
+        <p>Click <strong>"Open Version Folder"</strong> above to select a maimai version folder (e.g., <code>01. maimai</code>), or drag and drop song folders directly into this window.</p>
+        <button type="button" class="btn btn-primary" id="btn-empty-select">Select Folder Now</button>
+      </div>
+    </main>
+
+    <!-- Arcade Terminal / PowerShell Live Output -->
+    <section class="terminal-card">
+      <div class="terminal-header">
+        <div class="terminal-title-wrap">
+          <div class="terminal-dots">
+            <span class="dot dot-red"></span>
+            <span class="dot dot-yellow"></span>
+            <span class="dot dot-green"></span>
+          </div>
+          <span class="terminal-title">AstroDX Compiler Engine Terminal [PowerShell Emulation]</span>
+        </div>
+
+        <div class="terminal-actions">
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-clear-log" style="padding: 4px 10px; font-size: 0.75rem;">Clear</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-copy-log" style="padding: 4px 10px; font-size: 0.75rem;">Copy Log</button>
+        </div>
+      </div>
+
+      <div class="terminal-body" id="terminal-body-output">
+        <div class="log-line">
+          <span class="log-time">[Ready]</span>
+          <span class="log-type-accent">AstroDX .adx Song Package Compiler initialized.</span>
+        </div>
+        <div class="log-line">
+          <span class="log-time">[Info]</span>
+          <span class="log-type-info">Select a maimai version folder to start generating .adx song archives.</span>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Live Versions Master Dashboard Modal -->
+  <div class="modal-overlay" id="dashboard-modal-overlay">
+    <div class="modal-content dashboard-modal">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <div class="dash-header-title">
+            <span class="logo-badge" style="width: 28px; height: 28px; font-size: 1rem;">📊</span>
+            <h3>Maimai International Live Versions Dashboard</h3>
+          </div>
+          <p style="color: var(--text-secondary); font-size: 0.82rem; margin: 4px 0 0 0;">
+            Cross-referenced with SEGA official catalog. Monitor live availability and batch compile across all 28 versions.
+          </p>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-close-dashboard">✕</button>
+      </div>
+
+      <div class="modal-body" style="padding: 16px 24px; gap: 14px;">
+        <div class="dashboard-stats-grid">
+          <div class="dash-stat-box">
+            <span class="dash-stat-num" id="dash-total-versions">28</span>
+            <span class="dash-stat-label">Versions</span>
+          </div>
+          <div class="dash-stat-box stat-box-cyan">
+            <span class="dash-stat-num" id="dash-total-live">1,602</span>
+            <span class="dash-stat-label">SEGA Live Songs</span>
+          </div>
+          <div class="dash-stat-box stat-box-green">
+            <span class="dash-stat-num" id="dash-total-compiled">89</span>
+            <span class="dash-stat-label">Compiled .adx</span>
+          </div>
+          <div class="dash-stat-box stat-box-pink">
+            <span class="dash-stat-num" id="dash-total-pending">1,513</span>
+            <span class="dash-stat-label">Pending</span>
+          </div>
+        </div>
+
+        <div class="dashboard-toolbar">
+          <button type="button" class="btn btn-primary" id="btn-dash-compile-all">
+            <span>🚀 Batch Compile ALL Remaining Live Songs</span>
+          </button>
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-dash-refresh">
+            <span>🔄 Refresh Table</span>
+          </button>
+          <span id="dash-action-status" style="font-size: 0.82rem; color: var(--neon-cyan); margin-left: auto;"></span>
+        </div>
+
+        <div class="dashboard-table-scroll">
+          <table class="dashboard-table">
+            <thead>
+              <tr>
+                <th>Version</th>
+                <th>SEGA Live</th>
+                <th>Disk Match</th>
+                <th>Compiled</th>
+                <th>Progress</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="dashboard-table-body">
+              <tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 30px;">Loading versions summary...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="btn-close-dashboard-bottom">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Official SEGA International Catalog Modal -->
+  <div class="modal-overlay modal-large-overlay" id="catalog-modal-overlay">
+    <div class="modal-content modal-large">
+      <div class="modal-header">
+        <div>
+          <h3 style="margin: 0; font-size: 1.15rem;">🌐 Official SEGA International Catalog — <span id="catalog-version-title" style="color: var(--neon-cyan);">Version</span></h3>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin: 3px 0 0 0;">
+            Live songs directly from SEGA official database (maimai.sega.jp). Compare with your local song folder.
+          </p>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-close-catalog">✕</button>
+      </div>
+      
+      <div class="modal-body">
+        <!-- Catalog Stats Ribbon -->
+        <div class="dashboard-stats-grid" style="margin-bottom: 16px;">
+          <div class="dash-stat-box stat-box-cyan">
+            <span class="dash-stat-num" id="cat-stat-total">0</span>
+            <span class="dash-stat-label">Official Live Songs</span>
+          </div>
+          <div class="dash-stat-box stat-box-green">
+            <span class="dash-stat-num" id="cat-stat-matched">0</span>
+            <span class="dash-stat-label">Matched in Local Folder</span>
+          </div>
+          <div class="dash-stat-box stat-box-pink">
+            <span class="dash-stat-num" id="cat-stat-missing">0</span>
+            <span class="dash-stat-label">Missing from Disk</span>
+          </div>
+        </div>
+
+        <!-- Catalog Toolbar -->
+        <div class="catalog-toolbar">
+          <div class="search-box-wrap" style="flex: 1; max-width: 360px;">
+            <span>🔍</span>
+            <input type="text" id="input-catalog-search" placeholder="Search official title, artist, or category...">
+          </div>
+          <div class="filter-btn-group">
+            <button type="button" class="filter-pill active" data-catfilter="all" id="catfilter-all">All (<span id="cat-count-all">0</span>)</button>
+            <button type="button" class="filter-pill" data-catfilter="matched" id="catfilter-matched">🟢 Matched (<span id="cat-count-matched">0</span>)</button>
+            <button type="button" class="filter-pill filter-pill-missing" data-catfilter="missing" id="catfilter-missing">🔴 Missing (<span id="cat-count-missing">0</span>)</button>
+          </div>
+        </div>
+
+        <div id="catalog-alert-banner" class="catalog-alert-banner" style="display:none;"></div>
+
+        <div class="dashboard-table-scroll" style="max-height: 440px;">
+          <table class="dashboard-table">
+            <thead>
+              <tr>
+                <th style="width: 38px;">#</th>
+                <th>Official Song Title & Artist</th>
+                <th>Category</th>
+                <th>Difficulties (BAS / ADV / EXP / MAS / Re:MAS)</th>
+                <th>Local Match Status</th>
+              </tr>
+            </thead>
+            <tbody id="catalog-table-body">
+              <tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 30px;">Loading catalog...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="btn-close-catalog-bottom">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PowerShell Script Viewer Modal -->
+  <div class="modal-overlay" id="script-modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>PowerShell Equivalent Script</h3>
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-close-modal">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.88rem; color: var(--text-secondary);">
+          You can run this exact script in PowerShell inside any maimai version folder to achieve the same result via command-line:
+        </p>
+        <pre class="code-snippet-box" id="modal-ps-code"></pre>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="btn-close-modal-bottom">Close</button>
+        <button type="button" class="btn btn-primary" id="btn-copy-ps-code">📋 Copy PowerShell Code</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Application Logic -->
+  <script src="app.js"></script>
+</body>
+</html>

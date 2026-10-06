@@ -1,0 +1,6 @@
+{
+  "output_dir": "./output",
+  "source_root": "./songs",
+  "exclude_mp4": true,
+  "compression_level": 6
+}
